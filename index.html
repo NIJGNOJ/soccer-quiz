@@ -59,7 +59,7 @@
 <div id="app"><div class="wrap"><div style="color:#4a6580">로딩 중...</div></div></div>
 
 <script>
-// ── Firebase 설정 ─────────────────────────────────────────────────
+// ── Firebase 설정 ──────────────────────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyBpu_3ESEGK_1D0HLVTGAIXkHkWoa_whAQ",
   authDomain: "soccer-quiz-a9a12.firebaseapp.com",
@@ -72,7 +72,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// ── 상수 / 유틸 ───────────────────────────────────────────────────
+// ── 상수 / 유틸 ──────────────────────────────────────────────
 const QT = 30, RT = 6;
 const uid = () => Math.random().toString(36).slice(2, 11);
 const mkCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -81,7 +81,7 @@ const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 const PID = localStorage.getItem('sqpid') || uid();
 localStorage.setItem('sqpid', PID);
 
-// ── 상태 ─────────────────────────────────────────────────────────
+// ── 상태 ────────────────────────────────────────────────────
 let S = {
   view: 'home', nick: '', joinCode: '', code: '',
   room: null, myAns: null, tLeft: QT, revealCD: RT,
@@ -92,7 +92,7 @@ let S = {
 
 let roomRef = null, timerIv = null, hostTm = null, revealTm = null, revealCDIv = null, lastRound = -1;
 
-// ── Firebase ──────────────────────────────────────────────────────
+// ── Firebase ─────────────────────────────────────────────────
 function subRoom(code) {
   if (roomRef) roomRef.off();
   roomRef = db.ref('rooms/' + code);
@@ -117,15 +117,10 @@ function subRoom(code) {
   });
 }
 
-async function putRoom(r) {
-  await db.ref('rooms/' + r.code).set(r);
-}
-async function getRoom(code) {
-  const snap = await db.ref('rooms/' + code).once('value');
-  return snap.val();
-}
+async function putRoom(r) { await db.ref('rooms/' + r.code).set(r); }
+async function getRoom(code) { const snap = await db.ref('rooms/' + code).once('value'); return snap.val(); }
 
-// ── 타이머 ───────────────────────────────────────────────────────
+// ── 타이머 ───────────────────────────────────────────────────
 function startTimerUI(startTime) {
   clearInterval(timerIv);
   const tick = () => {
@@ -133,8 +128,7 @@ function startTimerUI(startTime) {
     const el = document.getElementById('tmr');
     if (el) { el.textContent = S.tLeft; el.style.color = S.tLeft>15?'#22c55e':S.tLeft>8?'#fbbf24':'#ef4444'; }
   };
-  tick();
-  timerIv = setInterval(tick, 200);
+  tick(); timerIv = setInterval(tick, 200);
 }
 function startRevealCD() {
   clearInterval(revealCDIv); S.revealCD = RT;
@@ -144,7 +138,7 @@ function startRevealCD() {
   }, 1000);
 }
 
-// ── 게임 로직 ─────────────────────────────────────────────────────
+// ── 게임 로직 ─────────────────────────────────────────────────
 async function doReveal(code) {
   const r = await getRoom(code);
   if (!r || r.phase !== 'question') return;
@@ -164,30 +158,32 @@ async function doNext(code) {
   if (nxt >= r.roundCount) await putRoom({ ...r, phase: 'finished' });
   else await putRoom({ ...r, phase: 'question', currentRound: nxt, questionStartTime: Date.now(), answers: {} });
 }
+
+// ── Gemini API 문제 생성 ──────────────────────────────────────
 async function genQs(n, key) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514', max_tokens: 8192,
-      messages: [{ role: 'user', content: `한국어로 축구 퀴즈 ${n}개를 만들어주세요. 선수(메시,호날두,손흥민,음바페 등), 유럽리그, 월드컵 역사, 규칙, 대기록 등 다양한 주제와 난이도를 섞어주세요.\n\n반드시 순수 JSON만 반환 (마크다운 없이):\n{"questions":[{"question":"질문","options":["A","B","C","D"],"correctIndex":0,"explanation":"간결한 해설"}]}` }]
-    })
-  });
-  if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.error?.message || 'API 오류 ' + res.status); }
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text:
+          `한국어로 축구 퀴즈 ${n}개를 만들어주세요. 선수(메시,호날두,손흥민,음바페 등), 유럽리그, 월드컵 역사, 규칙, 대기록 등 다양한 주제와 난이도를 섞어주세요.\n\n반드시 순수 JSON만 반환 (마크다운 없이):\n{"questions":[{"question":"질문","options":["A","B","C","D"],"correctIndex":0,"explanation":"간결한 해설"}]}`
+        }] }],
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.8 }
+      })
+    }
+  );
+  if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.error?.message || 'Gemini API 오류 ' + res.status); }
   const d = await res.json();
-  const txt = d.content.map(i => i.text||'').join('').replace(/```json|```/g,'').trim();
+  const txt = (d.candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/```json|```/g, '').trim();
   return JSON.parse(txt).questions;
 }
 
-// ── UI 액션 ───────────────────────────────────────────────────────
+// ── UI 액션 ──────────────────────────────────────────────────
 async function createRoom() {
   if (!S.nick.trim()) { set({ err: '닉네임을 입력해주세요' }); return; }
-  if (!S.apiKey.trim()) { set({ err: 'Anthropic API 키를 입력해주세요', showApiInput: true }); return; }
+  if (!S.apiKey.trim()) { set({ err: 'Gemini API 키를 입력해주세요', showApiInput: true }); return; }
   set({ busy: true, err: '' });
   const c = mkCode();
   const r = { code:c, hostId:PID, phase:'lobby', roundCount:10, currentRound:0, players:[{id:PID,nickname:S.nick.trim(),score:0}], questions:[], questionStartTime:null, answers:{} };
@@ -209,7 +205,7 @@ async function joinRoom() {
     await putRoom(upd); S.code = c; subRoom(c); set({ view:'lobby', busy:false });
   } catch(e) { set({ err: e.message, busy:false }); }
 }
-async function setRoundCount(n) { const r = await getRoom(S.code); if(r) await putRoom({...r,roundCount:n}); }
+async function setRoundCount(n) { const r = await getRoom(S.code); if(r) await putRoom({...r,roundCount:n}).catch(console.error); }
 async function startGame() {
   set({ busy: true, err: '' });
   try {
@@ -221,7 +217,7 @@ async function startGame() {
   } catch(e) {
     set({ err:'시작 실패: '+e.message, busy:false });
     const r2 = await getRoom(S.code).catch(()=>null);
-    if (r2) await putRoom({...r2,phase:'lobby'}).catch(()=>{});
+    if (r2) await putRoom({...r2, phase:'lobby'}).catch(()=>{});
   }
 }
 async function submitAnswer(idx) {
@@ -254,7 +250,7 @@ function set(o) { Object.assign(S, o); render(); }
 function updateJoinCode(v) { S.joinCode = v.toUpperCase(); document.getElementById('join-inp').value = S.joinCode; }
 function updateNick(v) { S.nick = v; }
 
-// ── 렌더 ─────────────────────────────────────────────────────────
+// ── 렌더 ────────────────────────────────────────────────────
 function render() {
   const room = S.room, phase = room?.phase;
   const isHost = room?.hostId === PID;
@@ -262,7 +258,6 @@ function render() {
   const myPlayer = room?.players?.find(p=>p.id===PID);
   const q = room?.questions?.[room?.currentRound];
   const myAD = room?.answers?.[PID];
-
   let html = '';
   if (S.view === 'home') html = renderHome();
   else if (!phase || phase==='lobby' || phase==='generating') html = renderLobby(room, isHost);
@@ -277,14 +272,14 @@ function renderHome() {
     <div class="sub">최대 4명이 함께하는 실시간 멀티플레이어 퀴즈</div>
     ${S.showApiInput ? `
       <div class="api-box">
-        <div class="api-label">🔑 Anthropic API 키 입력</div>
-        <input class="inp" id="api-inp" type="password" placeholder="sk-ant-api03-..." value="${esc(S.apiKey)}" onkeydown="if(event.key==='Enter')saveApiKey()" />
+        <div class="api-label">🔑 Gemini API 키 입력</div>
+        <input class="inp" id="api-inp" type="password" placeholder="AIza..." value="${esc(S.apiKey)}" onkeydown="if(event.key==='Enter')saveApiKey()" />
         <button class="btn btn-blue" onclick="saveApiKey()">저장</button>
-        <div class="api-hint">키는 이 브라우저에만 저장됩니다 · <a href="https://console.anthropic.com" target="_blank">키 발급받기 →</a></div>
+        <div class="api-hint">키는 이 브라우저에만 저장됩니다 · <a href="https://aistudio.google.com/app/apikey" target="_blank">Gemini API 키 발급받기 →</a></div>
       </div>
     ` : `
-      <div class="api-status" onclick="set({showApiInput:true})" style="cursor:pointer">
-        ${S.apiKey ? '🔑 API 키 설정됨 &nbsp;<span style="color:#22c55e">✓</span>&nbsp; <span style="font-size:11px">(변경하려면 클릭)</span>' : '⚠️ Anthropic API 키 필요 — 클릭하여 입력'}
+      <div class="api-status" onclick="set({showApiInput:true})">
+        ${S.apiKey ? '🔑 Gemini API 키 설정됨 &nbsp;<span style="color:#22c55e">✓</span>&nbsp;<span style="font-size:11px">(변경하려면 클릭)</span>' : '⚠️ Gemini API 키 필요 — 클릭하여 입력 (무료)'}
       </div>
     `}
     <input class="inp" id="nick-inp" placeholder="닉네임 (최대 12자)" maxlength="12" value="${esc(S.nick)}"
@@ -298,7 +293,7 @@ function renderHome() {
       <button class="btn btn-blue" style="margin-bottom:0;width:auto;padding:11px 18px" onclick="joinRoom()" ${S.busy?'disabled':''}>참가</button>
     </div>
     ${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}
-    <div class="foot">서로 다른 PC에서 방 코드로 접속 · Firebase 실시간 동기화</div>
+    <div class="foot">서로 다른 PC에서 방 코드로 접속 · Firebase 실시간 동기화 · Gemini AI 문제 생성</div>
   </div></div>`;
 }
 
