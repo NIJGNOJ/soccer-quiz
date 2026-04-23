@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>⚽ 축구 퀴즈 멀티플레이어</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#060d1a;color:#e2e8f0;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+    a{color:#3b82f6}
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+    .card{background:#0c1c30;border-radius:20px;padding:28px;width:100%;max-width:500px;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+    .card.wide{max-width:540px}
+    .title{font-size:30px;font-weight:900;text-align:center;margin-bottom:6px;background:linear-gradient(135deg,#4ade80,#22d3ee);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .sub{text-align:center;color:#4a6580;margin-bottom:24px;font-size:13px}
+    .inp{width:100%;background:#071222;border:1.5px solid #1a3550;border-radius:10px;padding:11px 14px;color:#e2e8f0;font-size:15px;outline:none;margin-bottom:10px}
+    .inp:focus{border-color:#3b82f6}
+    .btn{width:100%;padding:13px;border-radius:12px;border:none;cursor:pointer;font-size:15px;font-weight:700;color:#fff;margin-bottom:8px;transition:opacity .15s}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn:hover:not(:disabled){opacity:.88}
+    .btn-green{background:linear-gradient(135deg,#22c55e,#16a34a)}
+    .btn-blue{background:linear-gradient(135deg,#3b82f6,#2563eb)}
+    .btn-ghost{background:#071222;border:1.5px solid #1a3550}
+    .room-code{font-size:38px;font-weight:900;letter-spacing:8px;text-align:center;color:#22c55e;background:#071222;border-radius:14px;padding:14px 24px;margin-bottom:14px;user-select:all}
+    .section-label{font-size:13px;font-weight:700;color:#4a6580;margin-bottom:8px}
+    .player-row{display:flex;align-items:center;gap:10px;background:#071222;border-radius:9px;padding:10px 14px;margin-bottom:6px}
+    .player-row.me{background:#0e2d16}
+    .tag-host{font-size:11px;color:#fbbf24}
+    .tag-me{font-size:11px;padding:2px 7px;border-radius:20px;background:#0e2d16;color:#22c55e;margin-left:4px}
+    .round-btn{flex:1;padding:11px;border-radius:10px;background:transparent;color:#4a6580;font-size:18px;font-weight:800;cursor:pointer;transition:all .15s;border:2px solid #1a3550}
+    .round-btn.selected{border-color:#4ade80;background:#0e2d16;color:#22c55e}
+    .waiting-box{text-align:center;color:#4a6580;font-size:14px;margin-top:14px;padding:14px;background:#071222;border-radius:10px}
+    .timer{font-size:68px;font-weight:900;text-align:center;line-height:1;margin-bottom:6px;transition:color .3s}
+    .q-text{font-size:19px;font-weight:700;text-align:center;margin-bottom:22px;line-height:1.55;min-height:56px}
+    .opt{padding:15px 10px;border-radius:12px;border:none;font-size:14px;font-weight:600;text-align:left;transition:all .2s;line-height:1.4;width:100%;color:#e2e8f0}
+    .opt-default{background:#132236;cursor:pointer}.opt-default:hover{background:#1a2d45}
+    .opt-selected{background:#1e3a8a;cursor:default;outline:2px solid #3b82f6}
+    .opt-correct{background:#14532d;cursor:default;color:#4ade80;outline:2px solid #22c55e}
+    .opt-wrong{background:#7f1d1d;cursor:default;color:#fca5a5;outline:2px solid #ef4444}
+    .opt-other{background:#1a2a40;cursor:default;color:#4a6580}
+    .explanation{background:#071222;border-radius:10px;padding:11px 14px;margin-top:14px;font-size:13px;color:#94a3b8;line-height:1.7;border-left:3px solid #22c55e}
+    .score-row{display:flex;align-items:center;gap:10px;padding:13px 16px;border-radius:12px;margin-bottom:8px;background:#071222;border:1.5px solid transparent}
+    .score-row.gold{background:#1a2e10;border-color:#4ade80}
+    .score-row.mine{background:#0e2132;border-color:#3b82f6}
+    .err{color:#ef4444;font-size:13px;text-align:center;margin-top:10px}
+    .foot{text-align:center;color:#4a6580;font-size:12px;margin-top:20px}
+    .api-box{background:#071222;border:1.5px solid #1a3550;border-radius:12px;padding:16px;margin-bottom:16px}
+    .api-label{font-size:13px;font-weight:700;color:#4a6580;margin-bottom:8px}
+    .api-hint{font-size:12px;color:#4a6580;margin-top:6px}
+    .api-status{font-size:13px;color:#4a6580;text-align:center;padding:8px;border-radius:8px;background:#071222;cursor:pointer;margin-bottom:10px}
+    .prog-bar{flex:1;border-radius:3px;height:5px}
+    .progress-wrap{display:flex;gap:3px;margin-bottom:18px;height:5px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  </style>
+</head>
+<body>
+<div id="app"><div class="wrap"><div style="color:#4a6580">로딩 중...</div></div></div>
+
+<script>
+// ── Firebase 설정 ─────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyBpu_3ESEGK_1D0HLVTGAIXkHkWoa_whAQ",
+  authDomain: "soccer-quiz-a9a12.firebaseapp.com",
+  databaseURL: "https://soccer-quiz-a9a12-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "soccer-quiz-a9a12",
+  storageBucket: "soccer-quiz-a9a12.firebasestorage.app",
+  messagingSenderId: "111493632835",
+  appId: "1:111493632835:web:422ee889ffffc4509155f6"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ── 상수 / 유틸 ───────────────────────────────────────────────────
+const QT = 30, RT = 6;
+const uid = () => Math.random().toString(36).slice(2, 11);
+const mkCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+const PID = localStorage.getItem('sqpid') || uid();
+localStorage.setItem('sqpid', PID);
+
+// ── 상태 ─────────────────────────────────────────────────────────
+let S = {
+  view: 'home', nick: '', joinCode: '', code: '',
+  room: null, myAns: null, tLeft: QT, revealCD: RT,
+  busy: false, copied: false, err: '',
+  apiKey: localStorage.getItem('sq_apikey') || '',
+  showApiInput: false,
+};
+
+let roomRef = null, timerIv = null, hostTm = null, revealTm = null, revealCDIv = null, lastRound = -1;
+
+// ── Firebase ──────────────────────────────────────────────────────
+function subRoom(code) {
+  if (roomRef) roomRef.off();
+  roomRef = db.ref('rooms/' + code);
+  roomRef.on('value', snap => {
+    const data = snap.val();
+    if (!data) return;
+    S.room = data;
+    if (data.currentRound !== lastRound) { lastRound = data.currentRound; S.myAns = null; }
+    if (data.phase === 'question') {
+      startTimerUI(data.questionStartTime);
+      if (data.hostId === PID) {
+        clearTimeout(hostTm);
+        const rem = Math.max(0, QT * 1000 - (Date.now() - data.questionStartTime));
+        hostTm = setTimeout(() => doReveal(code), rem);
+      }
+    } else { clearInterval(timerIv); }
+    if (data.phase === 'reveal') {
+      startRevealCD();
+      if (data.hostId === PID) { clearTimeout(revealTm); revealTm = setTimeout(() => doNext(code), RT * 1000); }
+    }
+    render();
+  });
+}
+
+async function putRoom(r) {
+  await db.ref('rooms/' + r.code).set(r);
+}
+async function getRoom(code) {
+  const snap = await db.ref('rooms/' + code).once('value');
+  return snap.val();
+}
+
+// ── 타이머 ───────────────────────────────────────────────────────
+function startTimerUI(startTime) {
+  clearInterval(timerIv);
+  const tick = () => {
+    S.tLeft = Math.max(0, Math.ceil(QT - (Date.now() - startTime) / 1000));
+    const el = document.getElementById('tmr');
+    if (el) { el.textContent = S.tLeft; el.style.color = S.tLeft>15?'#22c55e':S.tLeft>8?'#fbbf24':'#ef4444'; }
+  };
+  tick();
+  timerIv = setInterval(tick, 200);
+}
+function startRevealCD() {
+  clearInterval(revealCDIv); S.revealCD = RT;
+  revealCDIv = setInterval(() => {
+    S.revealCD = Math.max(0, S.revealCD - 1);
+    const el = document.getElementById('rcd'); if (el) el.textContent = S.revealCD + '초 후 다음 문제';
+  }, 1000);
+}
+
+// ── 게임 로직 ─────────────────────────────────────────────────────
+async function doReveal(code) {
+  const r = await getRoom(code);
+  if (!r || r.phase !== 'question') return;
+  const cq = r.questions[r.currentRound];
+  const players = r.players.map(p => {
+    const a = r.answers?.[p.id];
+    if (!a || a.optionIndex !== cq.correctIndex) return p;
+    const ratio = Math.max(0, 1 - a.timeMs / (QT * 1000));
+    return { ...p, score: p.score + Math.round(1000 + ratio * 500) };
+  });
+  await putRoom({ ...r, phase: 'reveal', players });
+}
+async function doNext(code) {
+  const r = await getRoom(code);
+  if (!r || r.phase !== 'reveal') return;
+  const nxt = r.currentRound + 1;
+  if (nxt >= r.roundCount) await putRoom({ ...r, phase: 'finished' });
+  else await putRoom({ ...r, phase: 'question', currentRound: nxt, questionStartTime: Date.now(), answers: {} });
+}
+async function genQs(n, key) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514', max_tokens: 8192,
+      messages: [{ role: 'user', content: `한국어로 축구 퀴즈 ${n}개를 만들어주세요. 선수(메시,호날두,손흥민,음바페 등), 유럽리그, 월드컵 역사, 규칙, 대기록 등 다양한 주제와 난이도를 섞어주세요.\n\n반드시 순수 JSON만 반환 (마크다운 없이):\n{"questions":[{"question":"질문","options":["A","B","C","D"],"correctIndex":0,"explanation":"간결한 해설"}]}` }]
+    })
+  });
+  if (!res.ok) { const e = await res.json().catch(()=>{}); throw new Error(e?.error?.message || 'API 오류 ' + res.status); }
+  const d = await res.json();
+  const txt = d.content.map(i => i.text||'').join('').replace(/```json|```/g,'').trim();
+  return JSON.parse(txt).questions;
+}
+
+// ── UI 액션 ───────────────────────────────────────────────────────
+async function createRoom() {
+  if (!S.nick.trim()) { set({ err: '닉네임을 입력해주세요' }); return; }
+  if (!S.apiKey.trim()) { set({ err: 'Anthropic API 키를 입력해주세요', showApiInput: true }); return; }
+  set({ busy: true, err: '' });
+  const c = mkCode();
+  const r = { code:c, hostId:PID, phase:'lobby', roundCount:10, currentRound:0, players:[{id:PID,nickname:S.nick.trim(),score:0}], questions:[], questionStartTime:null, answers:{} };
+  try { await putRoom(r); S.code = c; subRoom(c); set({ view:'lobby', busy:false }); }
+  catch(e) { set({ err:'방 생성 실패: '+e.message, busy:false }); }
+}
+async function joinRoom() {
+  if (!S.nick.trim()) { set({ err: '닉네임을 입력해주세요' }); return; }
+  const c = S.joinCode.trim().toUpperCase();
+  if (!c) { set({ err: '방 코드를 입력해주세요' }); return; }
+  set({ busy: true, err: '' });
+  try {
+    const r = await getRoom(c);
+    if (!r) throw new Error('존재하지 않는 방입니다');
+    if (r.players.length >= 4) throw new Error('방이 가득 찼습니다 (최대 4인)');
+    if (r.phase !== 'lobby') throw new Error('이미 게임이 시작된 방입니다');
+    if (r.players.find(p => p.nickname === S.nick.trim())) throw new Error('이미 사용 중인 닉네임입니다');
+    const upd = { ...r, players:[...r.players,{id:PID,nickname:S.nick.trim(),score:0}] };
+    await putRoom(upd); S.code = c; subRoom(c); set({ view:'lobby', busy:false });
+  } catch(e) { set({ err: e.message, busy:false }); }
+}
+async function setRoundCount(n) { const r = await getRoom(S.code); if(r) await putRoom({...r,roundCount:n}); }
+async function startGame() {
+  set({ busy: true, err: '' });
+  try {
+    const r = await getRoom(S.code);
+    await putRoom({ ...r, phase:'generating' });
+    const qs = await genQs(r.roundCount, S.apiKey);
+    await putRoom({ ...r, phase:'question', questions:qs, currentRound:0, questionStartTime:Date.now(), answers:{} });
+    set({ busy: false });
+  } catch(e) {
+    set({ err:'시작 실패: '+e.message, busy:false });
+    const r2 = await getRoom(S.code).catch(()=>null);
+    if (r2) await putRoom({...r2,phase:'lobby'}).catch(()=>{});
+  }
+}
+async function submitAnswer(idx) {
+  if (S.myAns !== null) return;
+  S.myAns = idx; render();
+  const r = await getRoom(S.code);
+  if (!r || r.phase !== 'question' || r.answers?.[PID]) return;
+  const upd = { ...r, answers:{ ...r.answers, [PID]:{ optionIndex:idx, timeMs:Date.now()-r.questionStartTime } } };
+  await putRoom(upd);
+  if (r.hostId === PID && Object.keys(upd.answers).length >= upd.players.length) { clearTimeout(hostTm); doReveal(S.code); }
+}
+function saveApiKey() {
+  const v = document.getElementById('api-inp').value.trim();
+  if (!v) return;
+  S.apiKey = v; localStorage.setItem('sq_apikey', v);
+  set({ showApiInput: false, err: '' });
+}
+function copyCode() {
+  navigator.clipboard.writeText(S.code).catch(()=>{});
+  set({ copied:true }); setTimeout(()=>set({copied:false}), 2000);
+}
+function resetAll() {
+  if (roomRef) roomRef.off(); roomRef = null;
+  clearInterval(timerIv); clearTimeout(hostTm); clearTimeout(revealTm); clearInterval(revealCDIv);
+  lastRound = -1;
+  S = { ...S, view:'home', code:'', room:null, myAns:null, tLeft:QT, revealCD:RT, busy:false, err:'' };
+  render();
+}
+function set(o) { Object.assign(S, o); render(); }
+function updateJoinCode(v) { S.joinCode = v.toUpperCase(); document.getElementById('join-inp').value = S.joinCode; }
+function updateNick(v) { S.nick = v; }
+
+// ── 렌더 ─────────────────────────────────────────────────────────
+function render() {
+  const room = S.room, phase = room?.phase;
+  const isHost = room?.hostId === PID;
+  const sorted = [...(room?.players||[])].sort((a,b)=>b.score-a.score);
+  const myPlayer = room?.players?.find(p=>p.id===PID);
+  const q = room?.questions?.[room?.currentRound];
+  const myAD = room?.answers?.[PID];
+
+  let html = '';
+  if (S.view === 'home') html = renderHome();
+  else if (!phase || phase==='lobby' || phase==='generating') html = renderLobby(room, isHost);
+  else if (phase==='question' || phase==='reveal') html = renderGame(room, q, myAD, sorted, myPlayer);
+  else if (phase==='finished') html = renderFinished(room, sorted);
+  document.getElementById('app').innerHTML = html;
+}
+
+function renderHome() {
+  return `<div class="wrap"><div class="card">
+    <div class="title">⚽ 축구 퀴즈</div>
+    <div class="sub">최대 4명이 함께하는 실시간 멀티플레이어 퀴즈</div>
+    ${S.showApiInput ? `
+      <div class="api-box">
+        <div class="api-label">🔑 Anthropic API 키 입력</div>
+        <input class="inp" id="api-inp" type="password" placeholder="sk-ant-api03-..." value="${esc(S.apiKey)}" onkeydown="if(event.key==='Enter')saveApiKey()" />
+        <button class="btn btn-blue" onclick="saveApiKey()">저장</button>
+        <div class="api-hint">키는 이 브라우저에만 저장됩니다 · <a href="https://console.anthropic.com" target="_blank">키 발급받기 →</a></div>
+      </div>
+    ` : `
+      <div class="api-status" onclick="set({showApiInput:true})" style="cursor:pointer">
+        ${S.apiKey ? '🔑 API 키 설정됨 &nbsp;<span style="color:#22c55e">✓</span>&nbsp; <span style="font-size:11px">(변경하려면 클릭)</span>' : '⚠️ Anthropic API 키 필요 — 클릭하여 입력'}
+      </div>
+    `}
+    <input class="inp" id="nick-inp" placeholder="닉네임 (최대 12자)" maxlength="12" value="${esc(S.nick)}"
+      oninput="updateNick(this.value)" onkeydown="if(event.key==='Enter')createRoom()" />
+    <button class="btn btn-green" onclick="createRoom()" ${S.busy?'disabled':''}>
+      ${S.busy ? '생성 중...' : '🏟️ 방 만들기'}
+    </button>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <input class="inp" id="join-inp" style="flex:1;margin-bottom:0" placeholder="방 코드 6자리" maxlength="6"
+        value="${esc(S.joinCode)}" oninput="updateJoinCode(this.value)" onkeydown="if(event.key==='Enter')joinRoom()" />
+      <button class="btn btn-blue" style="margin-bottom:0;width:auto;padding:11px 18px" onclick="joinRoom()" ${S.busy?'disabled':''}>참가</button>
+    </div>
+    ${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}
+    <div class="foot">서로 다른 PC에서 방 코드로 접속 · Firebase 실시간 동기화</div>
+  </div></div>`;
+}
+
+function renderLobby(room, isHost) {
+  const phase = room?.phase;
+  return `<div class="wrap"><div class="card">
+    <div class="title">🏟️ 대기실</div>
+    <div class="sub">아래 코드를 친구에게 공유하세요</div>
+    <div class="room-code">${S.code}</div>
+    <button class="btn btn-blue" style="margin-bottom:20px" onclick="copyCode()">
+      ${S.copied ? '✅ 복사 완료!' : '📋 코드 복사하기'}
+    </button>
+    ${isHost ? `
+      <div class="section-label">문제 수 선택</div>
+      <div style="display:flex;gap:8px;margin-bottom:20px">
+        ${[10,20,30].map(n=>`<button class="round-btn${room.roundCount===n?' selected':''}" onclick="setRoundCount(${n})">${n}</button>`).join('')}
+      </div>
+    ` : `<div style="text-align:center;color:#4a6580;font-size:14px;margin-bottom:16px">문제 수: <b style="color:#22c55e">${room?.roundCount}문제</b></div>`}
+    <div class="section-label">참가자 (${room?.players?.length}/4)</div>
+    ${room?.players?.map(p=>`
+      <div class="player-row${p.id===PID?' me':''}">
+        <span style="font-size:18px">${p.id===room.hostId?'👑':'👤'}</span>
+        <span style="font-weight:600;flex:1">${esc(p.nickname)}</span>
+        ${p.id===room.hostId?'<span class="tag-host">방장</span>':''}
+        ${p.id===PID?'<span class="tag-me">나</span>':''}
+      </div>`).join('')}
+    ${isHost ? `
+      <button class="btn btn-green" style="margin-top:12px" onclick="startGame()" ${S.busy||phase==='generating'?'disabled':''}>
+        ${phase==='generating' ? '⏳ 문제 생성 중...' : `🚀 게임 시작! (${room?.roundCount}문제)`}
+      </button>
+    ` : `<div class="waiting-box">${phase==='generating'?'⏳ 문제를 생성하고 있어요...':'⌛ 방장이 게임을 시작할 때까지 대기 중...'}</div>`}
+    ${S.err ? `<div class="err">${esc(S.err)}</div>` : ''}
+  </div></div>`;
+}
+
+function renderGame(room, q, myAD, sorted, myPlayer) {
+  const phase = room.phase, cur = room.currentRound, total = room.roundCount;
+  const isCorrect = myAD?.optionIndex === q?.correctIndex;
+  const ansCount = Object.keys(room.answers||{}).length;
+  const optSt = i => {
+    if (phase==='question') return S.myAns===i?'selected':'default';
+    if (i===q.correctIndex) return 'correct';
+    if (myAD?.optionIndex===i) return 'wrong';
+    return 'other';
+  };
+  const bars = total<=20
+    ? Array.from({length:total}).map((_,i)=>`<div class="prog-bar" style="background:${i<cur?'#22c55e':i===cur?'#3b82f6':'#0f2030'}"></div>`).join('')
+    : `<div class="prog-bar" style="width:100%;background:#071222"><div style="height:5px;width:${(cur/total)*100}%;background:linear-gradient(90deg,#22c55e,#3b82f6);border-radius:3px"></div></div>`;
+  return `<div class="wrap"><div class="card wide">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <span style="color:#4a6580;font-size:13px;font-weight:700">${cur+1} / ${total}</span>
+      ${phase==='reveal'
+        ? `<span id="rcd" style="font-size:13px;color:#4a6580">${S.revealCD}초 후 다음 문제</span>`
+        : `<span style="font-size:13px;color:#22c55e;font-weight:700">${(myPlayer?.score||0).toLocaleString()}점</span>`}
+    </div>
+    <div class="progress-wrap">${bars}</div>
+    ${phase==='question'
+      ? `<div id="tmr" class="timer" style="color:${S.tLeft>15?'#22c55e':S.tLeft>8?'#fbbf24':'#ef4444'}">${S.tLeft}</div>`
+      : `<div style="text-align:center;font-size:22px;font-weight:800;margin-bottom:6px;color:${isCorrect?'#22c55e':myAD?'#ef4444':'#fbbf24'}">${isCorrect?'🎉 정답!':myAD?'❌ 오답':'⏰ 시간 초과'}</div>`}
+    <div class="q-text">${esc(q?.question||'')}</div>
+    <div class="grid2">
+      ${(q?.options||[]).map((opt,i)=>`
+        <button class="opt opt-${optSt(i)}" onclick="${phase==='question'?`submitAnswer(${i})`:''}">
+          <span style="font-size:11px;opacity:.6;margin-right:5px;font-family:monospace">${['A','B','C','D'][i]}</span>${esc(opt)}
+        </button>`).join('')}
+    </div>
+    ${phase==='reveal'&&q?.explanation?`<div class="explanation">💡 ${esc(q.explanation)}</div>`:''}
+    ${phase==='question'?`<div style="text-align:center;color:#4a6580;font-size:13px;margin-top:14px">${S.myAns!==null?'✅ 답변 완료 · 다른 플레이어를 기다리는 중...':ansCount+'/'+room.players.length+'명 답변 완료'}</div>`:''}
+    ${phase==='reveal'?`
+      <div style="margin-top:16px">
+        <div class="section-label">현재 순위</div>
+        ${sorted.map((p,i)=>`
+          <div class="score-row${i===0?' gold':p.id===PID?' mine':''}">
+            <span style="font-size:${i===0?26:20}px;min-width:28px">${['🥇','🥈','🥉','4️⃣'][i]}</span>
+            <span style="flex:1;font-weight:600">${esc(p.nickname)}${p.id===PID?' (나)':''}</span>
+            <span style="font-weight:800;color:${i===0?'#22c55e':'#e2e8f0'}">${p.score.toLocaleString()}점</span>
+          </div>`).join('')}
+      </div>`:''}
+  </div></div>`;
+}
+
+function renderFinished(room, sorted) {
+  return `<div class="wrap"><div class="card">
+    <div style="font-size:48px;text-align:center;margin-bottom:8px">🏆</div>
+    <div class="title">최종 결과</div>
+    <div class="sub">${room.roundCount}문제 완료 · 수고하셨습니다!</div>
+    ${sorted.map((p,i)=>`
+      <div class="score-row${i===0?' gold':p.id===PID?' mine':''}">
+        <span style="font-size:${i===0?28:22}px">${['🥇','🥈','🥉','4️⃣'][i]}</span>
+        <span style="flex:1;margin-left:10px;font-weight:700;font-size:${i===0?17:15}px">${esc(p.nickname)}${p.id===PID?' (나)':''}</span>
+        <span style="font-weight:900;font-size:${i===0?22:17}px;color:${i===0?'#22c55e':'#e2e8f0'}">${p.score.toLocaleString()}점</span>
+      </div>`).join('')}
+    <button class="btn btn-green" style="margin-top:16px" onclick="resetAll()">🔄 처음으로 돌아가기</button>
+  </div></div>`;
+}
+
+render();
+</script>
+</body>
+</html>
